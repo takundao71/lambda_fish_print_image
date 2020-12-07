@@ -42,6 +42,15 @@ def lambda_handler(event:, context:)
     response = Net::HTTP.get_response(uri)
     response_headers = response.each_header.to_h
 
+    # リダイレクトに対応
+    5.times do |i|
+      if response_headers["location"].present?
+        uri = URI.parse(response_headers["location"])
+        response = Net::HTTP.get_response(uri)
+        response_headers = response.each_header.to_h
+      end
+    end
+
     # 大きすぎる画像はlambdaが表示できないみたいなので301
     # headリクエストしたいがheadリクエストをnginxで受け付けてない場合もあるので普通にリクエスト
     if response_headers["content-length"].to_i > 6291556
@@ -84,11 +93,11 @@ def lambda_handler(event:, context:)
     headers = {
       'Content-Type': response_headers["content-type"].presence || 'image/jpeg',
       'X-IMProxy-Cache-Hits': 'MISS',
-      'Etag': response_headers["etag"],
-      'Last-Modified': response_headers["last-modified"],
-      'Date': response_headers["date"],
-      'Expires': response_headers["expires"],
     }
+    headers['Etag'.to_sym] = response_headers["etag"] if response_headers["etag"].present?
+    headers['Last-Modified'.to_sym] = response_headers["last-modified"] if response_headers["last-modified"].present?
+    headers['Date'.to_sym] = response_headers["date"] if response_headers["date"].present?
+    headers['Expires'.to_sym] = response_headers["expires"] if response_headers["expires"].present?
     return json_200(image_binary: image_binary, headers: headers)
   end
 
